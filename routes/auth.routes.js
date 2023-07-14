@@ -4,8 +4,9 @@ const User = require("../models/user.model");
 const bcrypt = require("bcryptjs");
 const router = new Router();
 const salt = 12;
+const { isLoggedIn, isLoggedOut } = require('../middleware/route-guard.js');
 
-router.get("/signup", (req, res) => {
+router.get("/signup", isLoggedOut, (req, res) => {
   res.render("auth/signup.hbs");
 });
 
@@ -58,8 +59,49 @@ router.post("/signup", (req, res, next) => {
     });
 });
 
-router.get("/userProfile", (req, res) => {
-  res.render("users/user-profile.hbs");
+
+router.get('/login', (req, res, next) => {
+  res.render('auth/login.hbs')
+});
+
+router.get('/userProfile', isLoggedIn, (req, res) => {
+  res.render('users/user-profile', { userInSession: req.session.user });
+});
+
+router.post('/login', (req, res, next) => {
+  console.log('SESSION =====> ', req.session);
+  const { email, password } = req.body;
+ 
+  if (email === '' || password === '') {
+    res.render('auth/login', {
+      errorMessage: 'Please enter both, email and password to login.'
+    });
+    return;
+  }
+ 
+  User.findOne({ email })
+    .then(user => {
+      if (!user) {
+        console.log("Email not registered. ");
+        res.render('auth/login', { errorMessage: 'User not found and/or incorrect password.' });
+        return;
+      } else if (bcrypt.compareSync(password, user.passwordHash)) {
+        req.session.user = user
+        console.log("Sessions after login", req.session)
+        res.redirect('/auth/userProfile');
+      } else {
+        console.log("Incorrect password. ");
+        res.render('auth/login', { errorMessage: 'User not found and/or incorrect password.' });
+      }
+    })
+    .catch(error => next(error));
+});
+
+router.post('/logout', (req, res, next) => {
+  req.session.destroy(err => {
+    if (err) next(err);
+    res.redirect('/auth/login');
+  });
 });
 
 module.exports = router;
